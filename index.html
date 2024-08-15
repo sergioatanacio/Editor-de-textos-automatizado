@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplicación Avanzada de Etiquetas y Notas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+    <div class="container mx-auto p-4 flex-1 flex flex-col">
+        <div class="bg-white p-4 mb-4 rounded shadow">
+            <h2 class="text-xl font-bold mb-2">Gestión de Etiquetas</h2>
+            <div class="flex flex-col space-y-2">
+                <input type="text" id="etiquetaNombre" placeholder="Nombre de la etiqueta" class="border p-2">
+                <div class="flex space-x-2">
+                    <textarea id="etiquetaTexto" placeholder="Texto de la etiqueta. Use {} para la posición del cursor o texto seleccionado." class="border p-2 h-24 flex-grow"></textarea>
+                    <button id="insertarLlaves" class="bg-purple-500 text-white px-4 py-2 rounded">Insertar {}</button>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="agregarEtiqueta" class="bg-blue-500 text-white px-4 py-2 rounded">Agregar Etiqueta</button>
+                    <button id="exportarEtiquetas" class="bg-green-500 text-white px-4 py-2 rounded">Exportar Etiquetas</button>
+                    <button id="importarEtiquetas" class="bg-yellow-500 text-white px-4 py-2 rounded">Importar Etiquetas</button>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-4 rounded shadow flex-1 flex flex-col">
+            <h2 class="text-xl font-bold mb-2">Bloc de Notas</h2>
+            <div id="gruposEtiquetas" class="mb-4"></div>
+            <div class="flex space-x-2 mb-2">
+                <button id="deshacer" class="bg-gray-300 px-4 py-2 rounded">Deshacer</button>
+                <button id="rehacer" class="bg-gray-300 px-4 py-2 rounded">Rehacer</button>
+                <button id="exportarNotas" class="bg-green-500 text-white px-4 py-2 rounded">Exportar Notas</button>
+                <button id="importarNotas" class="bg-yellow-500 text-white px-4 py-2 rounded">Importar Notas</button>
+            </div>
+            <textarea id="blocNotas" class="border p-2 flex-1 resize-none" placeholder="Escribe aquí..."></textarea>
+        </div>
+    </div>
+
+    <script>
+        const etiquetaNombre = document.getElementById('etiquetaNombre');
+        const etiquetaTexto = document.getElementById('etiquetaTexto');
+        const insertarLlaves = document.getElementById('insertarLlaves');
+        const agregarEtiqueta = document.getElementById('agregarEtiqueta');
+        const exportarEtiquetas = document.getElementById('exportarEtiquetas');
+        const importarEtiquetas = document.getElementById('importarEtiquetas');
+        const gruposEtiquetas = document.getElementById('gruposEtiquetas');
+        const blocNotas = document.getElementById('blocNotas');
+        const deshacer = document.getElementById('deshacer');
+        const rehacer = document.getElementById('rehacer');
+        const exportarNotas = document.getElementById('exportarNotas');
+        const importarNotas = document.getElementById('importarNotas');
+
+        let grupos = { 'Default': {} };
+        let grupoActual = 'Default';
+        let historial = [''];
+        let posicionHistorial = 0;
+
+        function actualizarBotones() {
+            gruposEtiquetas.innerHTML = '';
+            Object.entries(grupos).forEach(([nombreGrupo, etiquetas]) => {
+                const grupoDiv = document.createElement('div');
+                grupoDiv.className = 'mb-2';
+                grupoDiv.innerHTML = `<h3 class="font-bold">${nombreGrupo}</h3>`;
+                Object.entries(etiquetas).forEach(([nombre, texto]) => {
+                    const boton = document.createElement('button');
+                    boton.textContent = nombre;
+                    boton.className = 'bg-gray-200 px-2 py-1 rounded mr-2 mb-2';
+                    boton.addEventListener('click', () => insertarTexto(texto));
+                    grupoDiv.appendChild(boton);
+
+                    const eliminarBoton = document.createElement('button');
+                    eliminarBoton.textContent = 'X';
+                    eliminarBoton.className = 'bg-red-500 text-white px-2 py-1 rounded mr-2 mb-2';
+                    eliminarBoton.addEventListener('click', () => eliminarEtiqueta(nombreGrupo, nombre));
+                    grupoDiv.appendChild(eliminarBoton);
+                });
+                gruposEtiquetas.appendChild(grupoDiv);
+            });
+        }
+
+        function insertarTexto(plantilla) {
+            const inicio = blocNotas.selectionStart;
+            const fin = blocNotas.selectionEnd;
+            const seleccion = blocNotas.value.substring(inicio, fin);
+            const textoAntes = blocNotas.value.substring(0, inicio);
+            const textoDespues = blocNotas.value.substring(fin);
+
+            const posicionLlaves = plantilla.indexOf('{}');
+            let nuevoTexto, nuevaPosicion;
+
+            if (seleccion) {
+                nuevoTexto = plantilla.replace('{}', seleccion);
+                nuevaPosicion = inicio + posicionLlaves + seleccion.length;
+            } else {
+                nuevoTexto = plantilla.replace('{}', '');
+                nuevaPosicion = inicio + posicionLlaves;
+            }
+
+            blocNotas.value = textoAntes + nuevoTexto + textoDespues;
+            blocNotas.setSelectionRange(nuevaPosicion, nuevaPosicion);
+            blocNotas.focus();
+            agregarAlHistorial();
+        }
+
+        function eliminarEtiqueta(grupo, nombre) {
+            if (confirm(`¿Estás seguro de que quieres eliminar la etiqueta "${nombre}"?`)) {
+                delete grupos[grupo][nombre];
+                actualizarBotones();
+            }
+        }
+
+        function agregarAlHistorial() {
+            historial = historial.slice(0, posicionHistorial + 1);
+            historial.push(blocNotas.value);
+            posicionHistorial = historial.length - 1;
+        }
+
+        insertarLlaves.addEventListener('click', () => {
+            const inicio = etiquetaTexto.selectionStart;
+            const fin = etiquetaTexto.selectionEnd;
+            const textoAntes = etiquetaTexto.value.substring(0, inicio);
+            const textoDespues = etiquetaTexto.value.substring(fin);
+            etiquetaTexto.value = textoAntes + '{}' + textoDespues;
+            etiquetaTexto.setSelectionRange(inicio + 1, inicio + 1);
+            etiquetaTexto.focus();
+        });
+
+        agregarEtiqueta.addEventListener('click', () => {
+            const nombre = etiquetaNombre.value.trim();
+            const texto = etiquetaTexto.value;
+            
+            if (nombre && texto) {
+                grupos[grupoActual][nombre] = texto;
+                actualizarBotones();
+                etiquetaNombre.value = '';
+                etiquetaTexto.value = '';
+            }
+        });
+
+        exportarEtiquetas.addEventListener('click', () => {
+            const contenido = JSON.stringify(grupos);
+            const blob = new Blob([contenido], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'etiquetas.etq';
+            a.click();
+        });
+
+        importarEtiquetas.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.etq';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = readerEvent => {
+                    const content = readerEvent.target.result;
+                    const nuevoGrupo = JSON.parse(content);
+                    const nombreGrupo = `Grupo ${Object.keys(grupos).length + 1}`;
+                    grupos[nombreGrupo] = nuevoGrupo['Default'];
+                    actualizarBotones();
+                }
+                reader.readAsText(file);
+            }
+            input.click();
+        });
+
+        blocNotas.addEventListener('input', agregarAlHistorial);
+
+        deshacer.addEventListener('click', () => {
+            if (posicionHistorial > 0) {
+                posicionHistorial--;
+                blocNotas.value = historial[posicionHistorial];
+            }
+        });
+
+        rehacer.addEventListener('click', () => {
+            if (posicionHistorial < historial.length - 1) {
+                posicionHistorial++;
+                blocNotas.value = historial[posicionHistorial];
+            }
+        });
+
+        exportarNotas.addEventListener('click', () => {
+            const contenido = blocNotas.value;
+            const blob = new Blob([contenido], {type: 'text/plain'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'notas.txt';
+            a.click();
+        });
+
+        importarNotas.addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.txt';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = readerEvent => {
+                    blocNotas.value = readerEvent.target.result;
+                    agregarAlHistorial();
+                }
+                reader.readAsText(file);
+            }
+            input.click();
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey && e.key === 'z') {
+                e.preventDefault();
+                deshacer.click();
+            } else if (e.ctrlKey && e.key === 'y') {
+                e.preventDefault();
+                rehacer.click();
+            }
+        });
+
+        actualizarBotones();
+    </script>
+</body>
+</html>
